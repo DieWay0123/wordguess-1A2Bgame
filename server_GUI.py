@@ -186,6 +186,8 @@ class ServerGUI:
                     self.set_answer_button.config(state="normal")
                     self.modify_output_text(f"[Info]: 伺服器socket已關閉\n", "info")
                     self.server_socket.close()
+                elif msg == "QUIT":
+                    self.stop_server()
             except OSError:
                 break  # socket 關閉，跳出迴圈結束 thread
             except Exception as e:

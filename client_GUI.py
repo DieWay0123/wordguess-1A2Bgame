@@ -8,7 +8,7 @@ class ClientGUI:
         # socket相關參數
         self.socket = None
         self.server_address = None
-        self.client_address = ('127.0.0.1', 12345)
+        self.client_address = ('192.168.16.99', 12345)
         self.receive_thread = None
 
         # 猜數字相關參數
@@ -77,6 +77,9 @@ class ClientGUI:
         # replay按鈕
         self.replay_button = tk.Button(self.guess_frame, text="再玩一次", command=self.replay_game, state="disabled")
         self.replay_button.pack()
+        # 結束遊戲按鈕
+        self.quit_button = tk.Button(root, text="結束遊戲", command=self.quit_game)
+        self.quit_button.pack()
 
         # === GUI grid排版調整
         self.root.rowconfigure(1, weight=1)
@@ -84,6 +87,17 @@ class ClientGUI:
         self.input_entry_frame.grid(row=0, column=0)
         self.text_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
         self.guess_frame.grid(row=2, column=0)
+
+    def quit_game(self):
+        try:
+            quit_message = "QUIT"
+            self.socket.sendto(quit_message.encode(), self.server_address)
+        except Exception as e:
+            print(f"Error sending quit message: {e}")
+        finally:
+            self.socket.close()
+            self.root.destroy()  # 關閉 Tkinter GUI
+
 
     def replay_game(self):
         self.reset_timeout_timer()
@@ -97,6 +111,7 @@ class ClientGUI:
         ip = server_address[0]
         port = server_address[1]
         try:
+            self.modify_output_text(f"[Info]: 正在確認連線{self.client_address[0]}:{self.client_address[1]}->{ip}:{port}")
             self.socket.sendto(f"[Connecting]: client->{ip}:{port}".encode(), self.server_address)
             data, addr = self.socket.recvfrom(1024)
             self.modify_output_text(f"[Connection Success!]: 伺服器回應為: {data.decode()}\n", "success")
@@ -189,16 +204,17 @@ class ClientGUI:
                     self.ready_to_guess = True # 設定遊戲已開始，方便後續遊戲狀態判斷
                     if "[Ready]:" in response:
                         self.answer_length = int(response.split(":")[1].split("，")[0]) # 從server發送的ready訊息得到答案n為多少
-                    self.modify_output_text("[Info]: Server已設定好答案，請輸入你猜的字串(0~9, A~F)\n", "info")
+                    self.modify_output_text(f"[Info]: Server已設定好答案(本次長度:{self.answer_length})，請輸入你要猜的字串(0~9, A~F)\n", "info")
                     self.guess_button.config(state='normal') # 設定猜答案按鈕可以開始用，在設定好答案前為不可用
                     self.start_time = datetime.now() # 設定開始猜的時間
+                    self.guess_count = 0
                     continue
                 elif response.startswith("[Guess Reply]:") and "恭喜猜對" in response:
                     self.replay_button.config(state="normal") # 設定reaply按鈕猜對後可以再次遊玩
                     duration = (datetime.now() - self.start_time).total_seconds()
                     finish_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     self.modify_output_text(f"[Game Finish!]: 共猜{self.guess_count}次，用時{duration:.2f}秒\n", "bold")
-                    self.modify_output_text(f"若要再次遊玩請點擊下方「再玩一次」按鈕!", "success")
+                    self.modify_output_text(f"若要再次遊玩請點擊下方「再玩一次」按鈕!\n", "success")
                     self.guess_button.config(state="disabled")
                     self.start_button.config(state="normal")
                     # 傳送使用者遊戲資訊回server
@@ -206,6 +222,8 @@ class ClientGUI:
                     self.socket.sendto(userinfo_msg.encode(), self.server_address)
                 elif response.startswith("[Guess Reply]"):
                     self.modify_output_text(f"{response}\n", 'bold')
+                elif response.startswith("[Congratulations!]:"):
+                    self.modify_output_text(f"{response.split(":")[1]}\n", 'bold')
                 elif response.startswith("[Timeout]:"):
                     self.modify_output_text(f"{response}", "error")
                     self.guess_button.config(state="disabled")
@@ -259,6 +277,7 @@ class ClientGUI:
         # 重製各個參數
         self.game_running = False
         self.answer_length = 0
+        self.guess_count = 0
         self.server_address = None
         # 調整按鈕設定
         self.start_button.config(state="normal")
