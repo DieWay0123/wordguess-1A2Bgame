@@ -11,7 +11,7 @@ class ServerGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("UDP猜字串-Server")
-        self.root.geometry("500x400")
+        self.root.minsize(900, 540)
 
         # socket變數
         self.server_socket = None # 用於存放server socket的實體
@@ -44,9 +44,17 @@ class ServerGUI:
 
         # ===== 輸出訊息區GUI =====
         self.text_frame = tk.Frame(self.root)
+        self.text_frame.rowconfigure(0, weight=1)
+        self.text_frame.columnconfigure(0, weight=1)
         # 用於監控的訊息輸出框
-        self.output_text = tk.Text(self.text_frame, height=15, state="disabled")
-        self.output_text.pack()
+        self.output_text = tk.Text(self.text_frame, state="disabled")
+        self.output_text.grid(row=0, column=0, sticky="nsew")
+        # 加上scrollbar，可以調整訊息框閱讀範圍
+        scrollbar_x = tk.Scrollbar(self.text_frame, orient="horizontal", command=self.output_text.xview)
+        scrollbar_y = tk.Scrollbar(self.text_frame, orient='vertical', command=self.output_text.yview)
+        scrollbar_x.grid(row=1, column=0, sticky="ew")
+        scrollbar_y.grid(row=0, column=1, sticky="ns")
+        self.output_text.config(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
 
         # ===== 答案設定區域GUI =====
         self.answer_input_frame = tk.Frame()
@@ -62,9 +70,11 @@ class ServerGUI:
         self.set_answer_button.pack(pady=5)
 
         # GUI排版設定
+        self.root.rowconfigure(2, weight=1)
+        self.root.columnconfigure(0, weight=1)
         self.IP_frame.grid(column=0, row=0)
-        self.answer_input_frame.grid(column=0, row=1)
-        self.text_frame.grid(column=0, row=2)
+        self.answer_input_frame.grid(column=0, row=1, sticky="nsew")
+        self.text_frame.grid(column=0, row=2, sticky="nsew", padx=10, pady=10)
         
         # 讀取排行榜
         self.load_rankings()
@@ -85,14 +95,14 @@ class ServerGUI:
 
         try:
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.server_socket.bind((ip, port))
+            self.server_socket.bind(ip, port)
         except Exception as e:
             self.modify_output_text(f"[Error]: Socket 綁定失敗：{e}\n")
             return
 
         self.running = True
         self.set_answer_button.config(state="normal")
-        self.modify_output_text(f"[Info]: ✅伺服器已啟動，監聽 {ip}:{port}\n")
+        self.modify_output_text(f"[Info]: 伺服器已啟動，監聽 {ip}:{port}\n")
         self.receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
         self.receive_thread.start()
 
@@ -140,9 +150,15 @@ class ServerGUI:
                     
                     self.add_user_rankings(username, guess_count, duration, finish_time_str)
                     rank = self.get_rank(username, duration, finish_time_str)
-                    self.server_socket.sendto(f"[Congratulations!]: {username}！你是第 {rank}名!\n".encode(), addr)
+                    self.server_socket.sendto(f"[Congratulations!]: {username}！你是第 {rank}名!\n".encode(), self.client_address)
                     # server端show出目前ranking狀態
                     self.show_rankings(highlight_username=username, highlight_time=duration, highlight_finish=finish_time_str)
+                elif msg.startswith("[REPLAY]:"):
+                    self.modify_output_text(f"[Info]: client端要求重新開始遊戲，請再次設定答案\n")
+                    self.answer = ""
+                    self.answer_length = 0
+                    self.client_address = addr
+
 
             except Exception as e:
                 self.modify_output_text(f"[Error]: {e}")

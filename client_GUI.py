@@ -8,7 +8,7 @@ class ClientGUI:
         # socket相關參數
         self.socket = None
         self.sever_address = None
-        self.client_address = ('127.0.0.1', 12345)
+        self.client_address = ('10.223.12.187', 12345)
         self.receive_thread = None
 
         # 猜數字相關參數
@@ -20,7 +20,7 @@ class ClientGUI:
         
         self.root = root
         self.root.title("UDP猜字串-Client")
-        self.root.geometry("500x500")
+        self.root.geometry("900x540")
 
 
         # === 輸入連線相關資訊部分GUI ===
@@ -42,10 +42,19 @@ class ClientGUI:
         
         
         # === 輸出訊息監控窗部分GUI ===
-        self.output_text_frame = tk.Frame(self.root)
-        self.output_text = tk.Text(self.output_text_frame)
-        self.output_text.pack()
-        
+        self.text_frame = tk.Frame(self.root)
+        self.text_frame.rowconfigure(0, weight=1)
+        self.text_frame.columnconfigure(0, weight=1)
+        # 用於監控的訊息輸出框
+        self.output_text = tk.Text(self.text_frame, state="disabled")
+        self.output_text.grid(row=0, column=0, sticky="nsew")
+        # 加上scrollbar，可以調整訊息框閱讀範圍
+        scrollbar_x = tk.Scrollbar(self.text_frame, orient="horizontal", command=self.output_text.xview)
+        scrollbar_y = tk.Scrollbar(self.text_frame, orient='vertical', command=self.output_text.yview)
+        scrollbar_x.grid(row=1, column=0, sticky="ew")
+        scrollbar_y.grid(row=0, column=1, sticky="ns")
+        self.output_text.config(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+
         
         # === 輸入猜測部分GUI ===
         self.guess_frame = tk.Frame(self.root)
@@ -55,12 +64,24 @@ class ClientGUI:
         
         self.guess_button = tk.Button(self.guess_frame, text="送出猜測", command=self.send_guess, state='disabled')
         self.guess_button.pack(pady=5)
-        
+        # replay按鈕
+        self.replay_button = tk.Button(self.guess_frame, text="再玩一次", command=self.replay_game, state="disabled")
+        self.replay_button.pack()
+
         # === GUI grid排版調整
+        self.root.rowconfigure(1, weight=1)
+        self.root.columnconfigure(0, weight=1)
         self.input_entry_frame.grid(row=0, column=0)
-        self.output_text_frame.grid(row=1, column=0)
+        self.text_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
         self.guess_frame.grid(row=2, column=0)
-    
+
+    def replay_game(self):
+        if self.socket:
+            self.socket.sendto(f"[Replay]:{self.client_address}".encode(), self.server_address)
+            self.replay_button.config(state="disabled")
+            self.guess_entry.delete(0, tk.END)
+            self.modify_output_text("[Replay Requesting]已請求重新開始，請稍候Server設定新答案...\n")
+
     def start_game(self):
         ip = self.ip_entry.get()
         port = self.port_entry.get()
@@ -78,8 +99,11 @@ class ClientGUI:
 
         self.server_address = (ip, port)
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind(self.client_address)
-        self.modify_output_text(f"[Success]: 已連線到伺服器{ip}:{port}\n")
+        try:
+            self.socket.bind(self.client_address)
+        except Exception as e:
+            print(e)
+        self.modify_output_text(f"[Success]: 已連線到伺服器{ip}:{port}，等待server設定答案...\n")
         
         # 告訴server client的地址
         self.socket.sendto(f"[Connecting]: client->{ip}:{port}".encode(), self.server_address)
@@ -131,6 +155,7 @@ class ClientGUI:
                     self.start_time = datetime.now() # 設定開始猜的時間
                     continue            
                 elif response.startswith("[Success]:") and "恭喜猜對" in response:
+                    self.replay_button.config(state="normal") # 設定reaply按鈕猜對後可以再次遊玩
                     duration = (datetime.now() - self.start_time).total_seconds()
                     finish_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     self.modify_output_text(f"[Game Finish!]: 共猜{self.guess_count}次，用時{duration:.2f}秒\n")
